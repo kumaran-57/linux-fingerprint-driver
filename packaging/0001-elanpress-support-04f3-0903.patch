@@ -1,0 +1,68 @@
+diff --git a/libfprint/drivers/elan.h b/libfprint/drivers/elan.h
+index 6eba3f5..7a56294 100644
+--- a/libfprint/drivers/elan.h
++++ b/libfprint/drivers/elan.h
+@@ -166,7 +166,7 @@ static const struct elan_cmd stop_cmd = {
+ };
+ 
+ static const FpIdEntry elan_id_table[] = {
+-  {.vid = ELAN_VEND_ID,  .pid = 0x0903, .driver_data = ELAN_ALL_DEV},
++  /* {.vid = ELAN_VEND_ID,  .pid = 0x0903, .driver_data = ELAN_ALL_DEV}, Moved to elanpress (touch) */
+   {.vid = ELAN_VEND_ID,  .pid = 0x0907, .driver_data = ELAN_0907},
+   {.vid = ELAN_VEND_ID,  .pid = 0x0c01, .driver_data = ELAN_ALL_DEV},
+   {.vid = ELAN_VEND_ID,  .pid = 0x0c02, .driver_data = ELAN_ALL_DEV},
+diff --git a/libfprint/drivers/elanpress.c b/libfprint/drivers/elanpress.c
+index 672f17e..59e9e96 100644
+--- a/libfprint/drivers/elanpress.c
++++ b/libfprint/drivers/elanpress.c
+@@ -270,6 +270,15 @@ elanpress_frame_cb (FpiUsbTransfer *transfer, FpDevice *dev,
+ 
+   if (error)
+     {
++      if (g_error_matches (error, G_USB_DEVICE_ERROR, G_USB_DEVICE_ERROR_TIMED_OUT) &&
++          fpi_ssm_get_cur_state (transfer->ssm) == CAPTURE_POLL_READ &&
++          self->num_frames == 0)
++        {
++          fp_dbg ("transient idle poll timeout, resuming poll");
++          fpi_ssm_jump_to_state_delayed (transfer->ssm, CAPTURE_POLL_REQUEST,
++                                         ELANPRESS_IDLE_POLL_INTERVAL_MS);
++          return;
++        }
+       fpi_ssm_mark_failed (transfer->ssm, error);
+       return;
+     }
+diff --git a/libfprint/drivers/elanpress.h b/libfprint/drivers/elanpress.h
+index c379497..916ca16 100644
+--- a/libfprint/drivers/elanpress.h
++++ b/libfprint/drivers/elanpress.h
+@@ -36,16 +36,15 @@
+ 
+ #define ELANPRESS_CMD_LEN 2
+ #define ELANPRESS_CMD_TIMEOUT 5000
+-#define ELANPRESS_FRAME_TIMEOUT 2000
++#define ELANPRESS_FRAME_TIMEOUT 5000
+ 
+ /* interval between polls while frames of a touch are being collected */
+-#define ELANPRESS_POLL_INTERVAL_MS 30
++#define ELANPRESS_POLL_INTERVAL_MS 40
+ 
+-/* interval between polls while waiting for a finger to land or lift. Each
+- * poll pulls a whole frame rather than the single status byte it used to, so
+- * the transfer already paces the loop; a further delay on top of it only
+- * adds latency to noticing the finger. */
+-#define ELANPRESS_IDLE_POLL_INTERVAL_MS 5
++/* interval between polls while waiting for a finger to land or lift.
++ * Set to 40 ms (25 fps) to prevent USB bus saturation and buffer starvation
++ * on Full Speed (12 Mbps) USB links. */
++#define ELANPRESS_IDLE_POLL_INTERVAL_MS 40
+ 
+ /* consecutive untouched frames that end a touch. Presence is inferred from
+  * the image itself (see ELANPRESS_TOUCH_MIN_MEAN_DELTA) rather than asked of
+@@ -117,6 +116,7 @@ G_DECLARE_FINAL_TYPE (FpiDeviceElanPress, fpi_device_elanpress, FPI,
+                       DEVICE_ELANPRESS, FpDevice);
+ 
+ static const FpIdEntry elanpress_id_table[] = {
++  {.vid = ELANPRESS_VEND_ID, .pid = 0x0903, }, /* 04f3:0903 ASUS VivoBook 16X M1603QA */
+   {.vid = ELANPRESS_VEND_ID, .pid = 0x0c6e, }, /* 04f3:0c6e Rog Flow x13 etc. */
+   {.vid = ELANPRESS_VEND_ID, .pid = 0x0c4f, }, /* 04f3:0c4f Acer Aspire A515-45 */
+   {.vid = ELANPRESS_VEND_ID, .pid = 0x0c63, }, /* 04f3:0c63 */
