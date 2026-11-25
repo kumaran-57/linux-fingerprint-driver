@@ -66,7 +66,7 @@
   - Password fallback via `pam_unix.so` remains active at all times in `/etc/pam.d/common-auth`.
 - **Immediate Rollback Command:**
   ```bash
-  sudo ./linux-fingerprint-driver/scripts/rollback.sh
+  sudo ./scripts/rollback.sh
   ```
 
 ---

@@ -68,9 +68,9 @@
 
 ### Issue 6: "fprintd-enroll says 'swipe too short'"
 - **Cause:** System is running the stock `elan.c` swipe driver.
-- **Solution:** Verify with `./linux-fingerprint-driver/scripts/check_support.sh`. Install the patched `.deb` package:
+- **Solution:** Verify with `./scripts/check_support.sh`. Install the patched `.deb` package:
   ```bash
-  sudo apt install ./linux-fingerprint-driver/releases/libfprint-2-2_2.1.94.10-2+elanpress_amd64.deb
+  sudo apt install ./releases/libfprint-2-2_2.1.94.10-2+elanpress_amd64.deb
   ```
 
 ---
@@ -89,5 +89,5 @@
 
 If you need to quickly return to the default distribution state:
 ```bash
-sudo ./linux-fingerprint-driver/scripts/rollback.sh
+sudo ./scripts/rollback.sh
 ```

@@ -41,15 +41,15 @@ This project ports `04f3:0903` from legacy swipe-stitching to the modern `elanpr
 
 ## 📦 Quick Installation (.deb Package)
 
-Ready-to-install Debian package is available in the [`releases/`](file:///home/devil/Documents/Projects/Fingerprint_Sensor_For_Linux/linux-fingerprint-driver/releases/) directory.
+Ready-to-install Debian package is available in the [`releases/`](releases/) directory.
 
 ### Install via APT
 ```bash
-sudo apt install ./linux-fingerprint-driver/releases/libfprint-2-2_2.1.94.10-2+elanpress_amd64.deb
+sudo apt install ./releases/libfprint-2-2_2.1.94.10-2+elanpress_amd64.deb
 ```
 Or run the automated installer:
 ```bash
-sudo ./linux-fingerprint-driver/scripts/install.sh
+sudo ./scripts/install.sh
 ```
 
 ### Enroll Your Fingerprint
@@ -104,7 +104,7 @@ sudo apt install -y build-essential meson ninja-build pkg-config \
     libgirepository1.0-dev dpkg-dev
 
 # 2. Build the Debian package
-./linux-fingerprint-driver/packaging/build-deb.sh
+./packaging/build-deb.sh
 ```
 
 ---
@@ -158,10 +158,12 @@ linux-fingerprint-driver/
 
 If you ever wish to return to the distribution's default package:
 ```bash
-sudo ./linux-fingerprint-driver/scripts/rollback.sh
+sudo ./scripts/rollback.sh
 ```
 
 ---
 
-## 📄 License
-This project is licensed under the **GNU Lesser General Public License v2.1 or later (LGPL-2.1+)**, matching upstream `libfprint`.
+## 🙌 Acknowledgments & License
+
+- Built upon upstream [`libfprint`](https://gitlab.freedesktop.org/libfprint/libfprint) and the [`elanpress`](https://github.com/filip-rs/libfprint/tree/elanpress) touch-driver architecture (Copyright © 2026 Filip Spanne).
+- Licensed under the **GNU Lesser General Public License v2.1 or later (LGPL-2.1+)**, matching upstream `libfprint`. See [`LICENSE`](LICENSE) for details.

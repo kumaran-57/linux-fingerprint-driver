@@ -10,12 +10,12 @@ The easiest, cleanest, and most reliable method is using the pre-built `.deb` pa
 
 ### Method A: Single APT Command
 ```bash
-sudo apt install ./linux-fingerprint-driver/releases/libfprint-2-2_2.1.94.10-2+elanpress_amd64.deb
+sudo apt install ./releases/libfprint-2-2_2.1.94.10-2+elanpress_amd64.deb
 ```
 
 ### Method B: Automated Installer Script
 ```bash
-sudo ./linux-fingerprint-driver/scripts/install.sh
+sudo ./scripts/install.sh
 ```
 
 ### What the `.deb` package includes:
@@ -58,7 +58,7 @@ sudo apt install -y build-essential meson ninja-build pkg-config \
 
 ### Compile & Build Package:
 ```bash
-./linux-fingerprint-driver/packaging/build-deb.sh
+./packaging/build-deb.sh
 ```
 This script clones upstream `libfprint` (branch `elanpress`), applies our `0001-elanpress-support-04f3-0903.patch`, compiles with Meson/Ninja, strips binaries, and generates `releases/libfprint-2-2_2.1.94.10-2+elanpress_amd64.deb`.
 
@@ -68,5 +68,5 @@ This script clones upstream `libfprint` (branch `elanpress`), applies our `0001-
 
 To restore the official distribution package:
 ```bash
-sudo ./linux-fingerprint-driver/scripts/rollback.sh
+sudo ./scripts/rollback.sh
 ```

@@ -11,7 +11,7 @@
 - **Host Architecture:** x86_64
 - **Operating System:** Kali GNU/Linux Rolling (2026.3)
 - **Debian Base:** Debian Testing / Unstable (`kali-rolling`)
-- **Kernel Version:** `Linux devil 7.1.5+kali-amd64 #1 SMP PREEMPT_DYNAMIC Kali 7.1.5-1kali1 (2026-07-29) x86_64 GNU/Linux`
+- **Kernel Version:** `Linux <host> 7.1.5+kali-amd64 #1 SMP PREEMPT_DYNAMIC Kali 7.1.5-1kali1 (2026-07-29) x86_64 GNU/Linux`
 - **Desktop Environment:** GNOME Shell (XDG_CURRENT_DESKTOP=GNOME, Display Manager: GDM3)
 
 ## 2. Fingerprint Sensor Identification
@@ -48,7 +48,7 @@
   - Detected Device: `Device at /net/reactivated/Fprint/Device/0`
   - Name reported by libfprint: `"ElanTech Fingerprint Sensor"`
   - Assigned Driver: `elan` driver in `libfprint`
-  - Enrolled Fingers: None for current user (`devil`).
+  - Enrolled Fingers: None prior to driver patch.
   - Stages for Enrollment: `6` stages reported.
   - **CRITICAL FINDING — Scan Type:** Reported as `"swipe"` (`net.reactivated.Fprint.Device.scan-type = "swipe"`).
     - The physical sensor on ASUS VivoBook 16X is an area **touch** sensor (square sensor embedded in the touchpad upper right corner), but the `elan` driver defaults or defines it as `swipe`.
