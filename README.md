@@ -1,169 +1,128 @@
-# Linux Touch Fingerprint Driver — ELAN 04f3:0903 (ASUS VivoBook 16X)
+# ELAN Touch Fingerprint Driver for Linux (`04f3:0903`)
 
-An open-source touch/press fingerprint driver for **ELAN Microelectronics** capacitive sensors (`04f3:0903`) found on the **ASUS VivoBook 16X** and compatible laptops running Linux (Debian, Kali, Ubuntu, Fedora, Arch).
-
-This project ports `04f3:0903` from legacy swipe-stitching to the modern `elanpress` touch architecture in `libfprint`, bringing Windows Hello-grade fingerprint authentication to Linux.
+An open-source `libfprint` touch/press driver and Debian package for **ELAN Microelectronics** capacitive fingerprint sensors (`04f3:0903`), including the sensor built into the **ASUS VivoBook 16X** (`M1603QA`) and compatible laptops running Debian, Kali Linux, or Ubuntu.
 
 ---
 
-## 🎯 Target Hardware & System Architecture
+## Overview
 
-- **Target Laptop:** ASUS VivoBook 16X (`M1603QA_M1603QA` / AMD Ryzen 5000 series)
-- **Sensor Vendor:** ELAN Microelectronics Corp. (`ELAN:Fingerprint`)
-- **USB Hardware ID:** `04f3:0903` (bcdDevice: `1.70`, USB 2.0 Full Speed 12 Mbps)
-- **Sensor Type:** Capacitive Touch Area Sensor (integrated into top-right touchpad corner)
-- **Host Matching:** SIFT (Scale-Invariant Feature Transform) keypoint extraction + Lowe's ratio test + rigid geometric alignment
+In upstream `libfprint`, USB ID `04f3:0903` is routed to the legacy `elan` driver, which hardcodes `FP_SCAN_TYPE_SWIPE` and expects sliding frames for movement stitching. Because `04f3:0903` is a stationary capacitive touch area sensor, tapping or resting a finger fails with `FP_DEVICE_RETRY_TOO_SHORT` ("swipe too short").
 
----
+This project ports `04f3:0903` to the modern `elanpress` touch architecture and resolves downstream USB bandwidth, timeout, and PAM integration issues for reliable desktop, lockscreen, and `sudo` authentication.
 
-## 🔍 The Problem & Root Cause
+### Key Capabilities
 
-1. **The Stock Upstream Bug:**
-   In stock `libfprint` (from v0.8 through v1.94.10), `04f3:0903` is routed to the legacy `elan.c` driver, which assumes all devices are swipe strips (`FP_SCAN_TYPE_SWIPE`). When a user presses or taps their finger, `elan.c` expects sliding movement to stitch frames; receiving only stationary frames, it errors out with `FP_DEVICE_RETRY_TOO_SHORT` ("swipe too short"), making touch enrollment or verification fail.
-
-2. **USB Bus Saturation & Spurious Timeouts:**
-   Early `elanpress` ports configured idle polling at 5ms intervals. Because each frame is ~18 KB (84x108 pixels @ 16-bit depth), polling at 5ms attempts to push ~3.7 MB/s across a USB 2.0 Full Speed bus capped at 1.5 MB/s (12 Mbps). This caused severe buffer starvation, frame drops, and premature timeouts aborting verification without a touch.
-
-3. **Package Persistence on Debian/Kali:**
-   Manually copying library files into `/usr/lib/` or creating backups like `.stock-backup` in the library search path caused `ldconfig` to switch dynamic linker symlinks back to stock swipe drivers on system updates, and `apt upgrade` wiped untracked files.
+- **Native Press Semantics:** Replaces swipe stitching with `FP_SCAN_TYPE_PRESS`, 12-stage multi-angle enrollment, SIFT keypoint extraction, and geometric alignment matching.
+- **USB Full Speed Pacing:** Tunes idle and capture polling to 40 ms (~25 fps) to prevent USB 2.0 Full Speed (12 Mbps) bus saturation and frame drops.
+- **Resilient Timeout Handling:** Sets transfer timeouts to 5000 ms and gracefully retries transient `G_USB_DEVICE_ERROR_TIMED_OUT` conditions during idle polling and background calibration refreshes, while aborting immediately on cancellation.
+- **Tuned PAM Integration:**
+  - Configures `max-tries=3 timeout=20` for fingerprint retries across `sudo` and Polkit.
+  - Configures `timeout=-1` on `gdm-fingerprint` so the login screen waits indefinitely for a touch without timing out.
+  - Bypasses `pam_fprintd.so` inside `gdm-password` so password logins are instantaneous without blocking on `fprintd`.
+- **APT-Safe Debian Packaging:** Built with package epoch `2:1.94.10-2+elanpress` so routine `apt upgrade` runs do not overwrite the driver with distribution stock versions (`1:x`).
 
 ---
 
-## ⚡ Technical Solutions in This Release
+## Supported Hardware
 
-- **Native Touch Semantics:** Ports `04f3:0903` to `elanpress` (`FP_SCAN_TYPE_PRESS`) and removes it from `elan.h`.
-- **Bus-Paced Polling (40ms / 25 fps):** Prevents USB bus saturation on 12 Mbps links while maintaining instant touch response (<40ms latency).
-- **Graceful Timeout Handling:** Increases transfer timeout from 2000ms to 5000ms, and retries idle polling (both frame reads and background refreshes) during transient delays instead of crashing verification.
-- **Tuned PAM Integration:** Enables 3 fingerprint retries (`max-tries=3`), removes idle GDM login-screen timeouts (`timeout=-1` in `gdm-fingerprint`), and bypasses `pam_fprintd` inside `gdm-password` so password logins are instantaneous.
-- **Production Debian Package (`.deb`):** Packaged with epoch `2:1.94.10-2+elanpress` so `apt upgrade` will never overwrite the driver, with automated cleanups in `preinst`/`postinst` to prevent `ldconfig` poisoning.
+| USB ID | Hardware Model / Laptop | Driver Architecture | Status |
+|---|---|---|---|
+| `04f3:0903` | ASUS VivoBook 16X (`M1603QA`) & compatible ELAN touch sensors | `elanpress` (`FP_SCAN_TYPE_PRESS`) | Verified |
+| `04f3:0c6e` | ASUS ROG Flow X13 and compatible models | `elanpress` (`FP_SCAN_TYPE_PRESS`) | Supported |
+| `04f3:0c4f` | Acer Aspire A515-45 and compatible models | `elanpress` (`FP_SCAN_TYPE_PRESS`) | Supported |
+| `04f3:0c63` | ELAN Touch Series | `elanpress` (`FP_SCAN_TYPE_PRESS`) | Supported |
 
 ---
 
-## 📦 Quick Installation (.deb Package)
+## Installation
 
-Ready-to-install Debian package is available in the [`releases/`](releases/) directory.
+### Quick Install (Debian / Kali / Ubuntu)
 
-### Install via APT
+Download or clone the repository and install the release `.deb` package:
+
 ```bash
 sudo apt install ./releases/libfprint-2-2_2.1.94.10-2+elanpress_amd64.deb
 ```
-Or run the automated installer:
+
+Alternatively, run the installer script:
+
 ```bash
 sudo ./scripts/install.sh
 ```
 
-### Enroll Your Fingerprint
+> [!NOTE]
+> Reboot or restart GDM after installation so updated PAM rules take effect on the login screen.
+
+### Enroll & Verify
+
+Enroll your fingerprint using 12 touches at slightly varied angles:
+
 ```bash
 fprintd-enroll
-# Touch the sensor repeatedly (12 touches at slightly varied angles) until complete.
 ```
 
-### Verify Verification
+Verify fingerprint matching:
+
 ```bash
 fprintd-verify
 ```
 
 ---
 
-## 🔑 Important: GNOME Keyring & Fingerprint Login
+## Note on GNOME Keyring
 
-### The "Password Mismatch" or Prompt on Opening Apps
-When you log in to your desktop using a fingerprint, you may see a dialog when opening apps like Google Chrome, VS Code, or IDEs:
-> *"The password you use to log in to your computer no longer matches that of your login keyring."*
+On Linux, GNOME Keyring (`login.keyring`) is encrypted with your login password. When logging in with a fingerprint, PAM does not have your plaintext password in memory to decrypt the keyring automatically, which may cause browsers or IDEs to prompt for the keyring password after graphical login.
 
-#### Why does this happen?
-Your login keyring (`login.keyring`) is encrypted on disk with your user password. When you log in with a **password**, PAM passes your plaintext password to `pam_gnome_keyring.so`, which decrypts your keyring automatically. When you log in with a **fingerprint**, PAM verifies your biometric identity, but biometrics cannot decrypt an AES-encrypted password database because Linux PAM does not store your plaintext password in memory.
+- **Seamless Touch Login:** Open **Passwords and Keys** (`seahorse`), change the password on the **Login** keyring, and leave the new password blank so applications unlock it silently.
+- **Password-Protected Keyring:** Log in using your password once at cold boot (unlocking the keyring for the session), then use your fingerprint sensor for lockscreen unlock (`Win + L`), `sudo`, and administrative prompts.
 
-#### Solutions:
-- **Option A (Recommended for 100% Touch Automation):**
-  Set your keyring password to blank (empty):
-  1. Open the **Passwords and Keys** application (`seahorse`).
-  2. Right-click **Login** (or **Default**) under *Keyrings* and select **Change Password**.
-  3. Enter your current password.
-  4. Leave the **New Password** field completely blank and click **Continue** (select *Use Unsafe Storage*).
-  *Result: The keyring unlocks automatically on boot without prompting, even when logging in via fingerprint.*
-
-- **Option B (Maximum Security):**
-  Keep a password on your keyring. Enter your password at the initial cold boot / login screen (which unlocks the keyring for the day), and use the fingerprint sensor for:
-  - Screen wake / lockscreen unlock (`Win + L`)
-  - Terminal `sudo`
-  - Polkit GUI administrative prompts
+See [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) for detailed keyring recovery steps.
 
 ---
 
-## 🛠️ Building from Source
+## Building from Source
 
-To compile and package the driver locally:
+Install the required build dependencies:
 
 ```bash
-# 1. Install build dependencies
 sudo apt update
 sudo apt install -y build-essential meson ninja-build pkg-config \
     libusb-1.0-0-dev libglib2.0-dev libgudev-1.0-dev libgusb-dev \
     libpixman-1-dev libssl-dev libcairo2-dev gobject-introspection \
     libgirepository1.0-dev dpkg-dev
+```
 
-# 2. Build the Debian package
+Compile and generate the `.deb` package:
+
+```bash
 ./packaging/build-deb.sh
 ```
 
 ---
 
-## 📂 Repository Layout
+## Rollback
 
-```
-linux-fingerprint-driver/
-├── README.md                                 # Project documentation
-├── LICENSE                                   # GNU LGPL v2.1
-├── releases/
-│   └── libfprint-2-2_2.1.94.10-2+elanpress_amd64.deb  # Release binary package
-├── docs/
-│   ├── HARDWARE_INVENTORY.md                 # Sensor & host diagnostic specifications
-│   ├── SUPPORT_RESEARCH.md                   # Kernel & libfprint driver analysis
-│   ├── REVERSE_ENGINEERING.md                # Windows WHQL driver protocol analysis
-│   ├── ARCHITECTURE.md                       # Driver & biometric stack architecture
-│   ├── SECURITY.md                           # PAM configuration & biometric security
-│   ├── INSTALLATION.md                       # Comprehensive installation guide
-│   ├── TEST_REPORT.md                        # Verification & test results
-│   ├── TROUBLESHOOTING.md                    # Common issues and solutions
-│   └── ROADMAP.md                            # Multi-vendor roadmap
-├── src/
-│   └── drivers/
-│       ├── elanpress.c                       # ELAN touch driver implementation
-│       ├── elanpress.h                       # Device ID table & protocol opcodes
-│       ├── elanpress-match.c                 # Keypoint pairing & geometric fitting
-│       ├── elanpress-match.h                 # Matching thresholds & quality checks
-│       ├── elanpress-sift.c                  # In-tree SIFT feature extractor
-│       └── elanpress-sift.h                  # SIFT structures & interfaces
-├── tests/
-│   ├── unit/
-│   │   └── test_protocol.c                   # Protocol framing & opcode verification
-│   ├── integration/
-│   │   └── test_build.sh                     # Automated build verification
-│   └── mocks/
-│       └── mock_sensor.c                     # Simulated USB sensor lifecycle test
-├── scripts/
-│   ├── install.sh                            # Production deb package installer
-│   ├── rollback.sh                           # Clean rollback to stock distribution
-│   ├── check_support.sh                      # Live support & scan-type check
-│   └── collect_hardware_info.sh              # Diagnostic hardware discovery script
-└── packaging/
-    ├── build-deb.sh                          # Automated Debian package builder
-    └── 0001-elanpress-support-04f3-0903.patch # Patch against upstream libfprint
-```
+To restore the distribution's default `libfprint-2-2` package and original PAM configuration:
 
----
-
-## 🔄 Rollback to Stock Driver
-
-If you ever wish to return to the distribution's default package:
 ```bash
 sudo ./scripts/rollback.sh
 ```
 
 ---
 
-## 🙌 Acknowledgments & License
+## Documentation
 
-- Built upon upstream [`libfprint`](https://gitlab.freedesktop.org/libfprint/libfprint) and the [`elanpress`](https://github.com/filip-rs/libfprint/tree/elanpress) touch-driver architecture (Copyright © 2026 Filip Spanne).
-- Licensed under the **GNU Lesser General Public License v2.1 or later (LGPL-2.1+)**, matching upstream `libfprint`. See [`LICENSE`](LICENSE) for details.
+- [Installation & Build Guide](docs/INSTALLATION.md)
+- [Troubleshooting Guide](docs/TROUBLESHOOTING.md)
+- [System Architecture](docs/ARCHITECTURE.md)
+- [Hardware Inventory](docs/HARDWARE_INVENTORY.md)
+- [Windows Driver Reverse Engineering](docs/REVERSE_ENGINEERING.md)
+- [Security Model](docs/SECURITY.md)
+- [Verification & Test Report](docs/TEST_REPORT.md)
+
+---
+
+## Acknowledgments & License
+
+- Built on upstream [`libfprint`](https://gitlab.freedesktop.org/libfprint/libfprint) and the [`elanpress`](https://github.com/filip-rs/libfprint/tree/elanpress) driver architecture (Copyright © 2026 Filip Spanne).
+- Licensed under the **GNU Lesser General Public License v2.1 or later (LGPL-2.1+)**. See [LICENSE](LICENSE) for full license terms.
