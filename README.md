@@ -33,8 +33,9 @@ This project ports `04f3:0903` from legacy swipe-stitching to the modern `elanpr
 
 - **Native Touch Semantics:** Ports `04f3:0903` to `elanpress` (`FP_SCAN_TYPE_PRESS`) and removes it from `elan.h`.
 - **Bus-Paced Polling (40ms / 25 fps):** Prevents USB bus saturation on 12 Mbps links while maintaining instant touch response (<40ms latency).
-- **Graceful Timeout Handling:** Increases transfer timeout from 2000ms to 5000ms, and retries idle polling during transient delays instead of crashing verification.
-- **Production Debian Package (`.deb`):** Packaged with epoch `2:1.94.10-1+elanpress` so `apt upgrade` will never overwrite the driver, with automated cleanups in `preinst`/`postinst` to prevent `ldconfig` poisoning.
+- **Graceful Timeout Handling:** Increases transfer timeout from 2000ms to 5000ms, and retries idle polling (both frame reads and background refreshes) during transient delays instead of crashing verification.
+- **Tuned PAM Integration:** Enables 3 fingerprint retries (`max-tries=3`), removes idle GDM login-screen timeouts (`timeout=-1` in `gdm-fingerprint`), and bypasses `pam_fprintd` inside `gdm-password` so password logins are instantaneous.
+- **Production Debian Package (`.deb`):** Packaged with epoch `2:1.94.10-2+elanpress` so `apt upgrade` will never overwrite the driver, with automated cleanups in `preinst`/`postinst` to prevent `ldconfig` poisoning.
 
 ---
 
@@ -44,7 +45,7 @@ Ready-to-install Debian package is available in the [`releases/`](file:///home/d
 
 ### Install via APT
 ```bash
-sudo apt install ./linux-fingerprint-driver/releases/libfprint-2-2_2.1.94.10-1+elanpress_amd64.deb
+sudo apt install ./linux-fingerprint-driver/releases/libfprint-2-2_2.1.94.10-2+elanpress_amd64.deb
 ```
 Or run the automated installer:
 ```bash
@@ -115,7 +116,7 @@ linux-fingerprint-driver/
 ├── README.md                                 # Project documentation
 ├── LICENSE                                   # GNU LGPL v2.1
 ├── releases/
-│   └── libfprint-2-2_2.1.94.10-1+elanpress_amd64.deb  # Release binary package
+│   └── libfprint-2-2_2.1.94.10-2+elanpress_amd64.deb  # Release binary package
 ├── docs/
 │   ├── HARDWARE_INVENTORY.md                 # Sensor & host diagnostic specifications
 │   ├── SUPPORT_RESEARCH.md                   # Kernel & libfprint driver analysis

@@ -14,9 +14,10 @@ RELEASE_DIR="${PROJECT_ROOT}/releases"
 PATCH_FILE="${PROJECT_ROOT}/packaging/0001-elanpress-support-04f3-0903.patch"
 UPSTREAM_REPO="https://github.com/filip-rs/libfprint.git"
 UPSTREAM_BRANCH="elanpress"
-PKG_VERSION="2:1.94.10-1+elanpress"
+PKG_VERSION="2:1.94.10-2+elanpress"
+DEB_FILENAME="libfprint-2-2_2.1.94.10-2+elanpress_amd64.deb"
 
-echo "=== [1/6] Installing build dependencies (if needed) ==="
+echo "=== [1/6] Checking build dependencies ==="
 if ! command -v meson &>/dev/null || ! command -v ninja &>/dev/null || ! command -v dpkg-deb &>/dev/null; then
     echo "Missing build tools. Installing via apt..."
     sudo apt update
@@ -29,7 +30,12 @@ fi
 echo "=== [2/6] Preparing source tree ==="
 SRC_DIR="/tmp/libfprint-elanpress-src"
 rm -rf "${SRC_DIR}" "${BUILD_DIR}" "${PKG_DIR}"
-git clone --depth 1 -b "${UPSTREAM_BRANCH}" "${UPSTREAM_REPO}" "${SRC_DIR}"
+if [ -d "/tmp/libfprint-elanpress/.git" ]; then
+    cp -a /tmp/libfprint-elanpress "${SRC_DIR}"
+    git -C "${SRC_DIR}" checkout -- .
+else
+    git clone --depth 1 -b "${UPSTREAM_BRANCH}" "${UPSTREAM_REPO}" "${SRC_DIR}"
+fi
 
 echo "=== [3/6] Applying driver patch ==="
 cd "${SRC_DIR}"
@@ -42,7 +48,7 @@ meson setup "${BUILD_DIR}" "${SRC_DIR}" \
     --libdir=/usr/lib/x86_64-linux-gnu \
     -Ddoc=false \
     -Dinstalled-tests=false \
-    -Dudev_hw_db=enabled
+    -Dudev_hwdb=enabled
 
 ninja -C "${BUILD_DIR}"
 ninja -C "${BUILD_DIR}" sync-udev-hwdb
@@ -63,9 +69,9 @@ cp -a "${BUILD_DIR}/libfprint/70-libfprint-2.rules" "${PKG_DIR}/usr/lib/udev/rul
 cp -a "${BUILD_DIR}/libfprint/org.freedesktop.libfprint.metainfo.xml" "${PKG_DIR}/usr/share/metainfo/"
 
 # Write DEBIAN/control
-cat << 'EOF' > "${PKG_DIR}/DEBIAN/control"
+cat << EOF > "${PKG_DIR}/DEBIAN/control"
 Package: libfprint-2-2
-Version: 2:1.94.10-1+elanpress
+Version: ${PKG_VERSION}
 Architecture: amd64
 Maintainer: Open Source Linux Fingerprint Community <linux-fingerprint@github.com>
 Installed-Size: 850
@@ -78,9 +84,9 @@ Description: Async fingerprint library with ELAN touch press driver (04f3:0903)
  ELAN Microelectronics 04f3:0903 (ASUS VivoBook 16X M1603QA series) and
  related capacitive touch sensors (04f3:0c6e, 04f3:0c4f, 04f3:0c63).
  .
- Replaces broken swipe stitching with SIFT keypoint matching, Lowe's ratio test,
- multi-angle enrollment, and tuned 40ms bus polling to prevent USB Full Speed
- saturation and spurious timeouts.
+ Includes 40ms USB Full Speed bus pacing, resilient idle timeout handling
+ during indefinite login screen waits, 3-retry PAM configuration, and fast
+ GDM password login bypass.
 EOF
 
 # Write DEBIAN/preinst
@@ -98,14 +104,44 @@ EOF
 cat << 'EOF' > "${PKG_DIR}/DEBIAN/postinst"
 #!/bin/sh
 set -e
+
 if [ -f "/usr/lib/x86_64-linux-gnu/libfprint-2.so.2.0.0.stock-backup" ]; then
     mkdir -p /var/backups/libfprint
     mv -f "/usr/lib/x86_64-linux-gnu/libfprint-2.so.2.0.0.stock-backup" "/var/backups/libfprint/"
 fi
+
 ln -sf libfprint-2.so.2.0.0 /usr/lib/x86_64-linux-gnu/libfprint-2.so.2
 if command -v ldconfig >/dev/null 2>&1; then
     ldconfig
 fi
+
+# Back up and tune PAM settings for 3 retries, fast password login, and no login-screen idle timeout
+PAM_BACKUP_DIR="/var/backups/libfprint/pam"
+mkdir -p "${PAM_BACKUP_DIR}"
+
+if [ -f /etc/pam.d/common-auth ]; then
+    [ -f "${PAM_BACKUP_DIR}/common-auth.orig" ] || cp -a /etc/pam.d/common-auth "${PAM_BACKUP_DIR}/common-auth.orig"
+    if grep -q 'pam_fprintd\.so' /etc/pam.d/common-auth; then
+        sed -i -E 's/pam_fprintd\.so([[:space:]].*)?$/pam_fprintd.so max-tries=3 timeout=20/' /etc/pam.d/common-auth
+        if ! grep -q 'pam_succeed_if\.so quiet service in gdm-password:kde' /etc/pam.d/common-auth; then
+            sed -i '/pam_fprintd\.so/i auth\t[success=1 default=ignore]\tpam_succeed_if.so quiet service in gdm-password:kde' /etc/pam.d/common-auth
+        fi
+    fi
+fi
+
+if [ -f /usr/share/pam-configs/fprintd ]; then
+    [ -f "${PAM_BACKUP_DIR}/pam-configs-fprintd.orig" ] || cp -a /usr/share/pam-configs/fprintd "${PAM_BACKUP_DIR}/pam-configs-fprintd.orig"
+    sed -i -E 's/pam_fprintd\.so([[:space:]].*)?$/pam_fprintd.so max-tries=3 timeout=20/' /usr/share/pam-configs/fprintd
+fi
+
+for gdm_pam in /etc/pam.d/gdm-fingerprint /etc/pam.d/kde-fingerprint; do
+    if [ -f "${gdm_pam}" ]; then
+        base_name="$(basename "${gdm_pam}")"
+        [ -f "${PAM_BACKUP_DIR}/${base_name}.orig" ] || cp -a "${gdm_pam}" "${PAM_BACKUP_DIR}/${base_name}.orig"
+        sed -i -E '/^auth[[:space:]]/ s/pam_fprintd\.so([[:space:]].*)?$/pam_fprintd.so max-tries=3 timeout=-1/' "${gdm_pam}"
+    fi
+done
+
 if command -v systemd-hwdb >/dev/null 2>&1; then
     systemd-hwdb update || true
 elif command -v udevadm >/dev/null 2>&1; then
@@ -125,6 +161,22 @@ EOF
 cat << 'EOF' > "${PKG_DIR}/DEBIAN/postrm"
 #!/bin/sh
 set -e
+
+if [ "$1" = "remove" ] || [ "$1" = "purge" ]; then
+    PAM_BACKUP_DIR="/var/backups/libfprint/pam"
+    if [ -f "${PAM_BACKUP_DIR}/common-auth.orig" ]; then
+        mv -f "${PAM_BACKUP_DIR}/common-auth.orig" /etc/pam.d/common-auth
+    fi
+    if [ -f "${PAM_BACKUP_DIR}/pam-configs-fprintd.orig" ] && [ -f /usr/share/pam-configs/fprintd ]; then
+        mv -f "${PAM_BACKUP_DIR}/pam-configs-fprintd.orig" /usr/share/pam-configs/fprintd
+    fi
+    for base_name in gdm-fingerprint kde-fingerprint; do
+        if [ -f "${PAM_BACKUP_DIR}/${base_name}.orig" ] && [ -f "/etc/pam.d/${base_name}" ]; then
+            mv -f "${PAM_BACKUP_DIR}/${base_name}.orig" "/etc/pam.d/${base_name}"
+        fi
+    done
+fi
+
 if command -v ldconfig >/dev/null 2>&1; then
     ldconfig
 fi
@@ -145,7 +197,8 @@ chmod -R u=rwX,go=rX "${PKG_DIR}/usr"
 
 echo "=== [6/6] Generating Debian package (.deb) ==="
 mkdir -p "${RELEASE_DIR}"
-OUTPUT_DEB="${RELEASE_DIR}/libfprint-2-2_2.1.94.10-1+elanpress_amd64.deb"
+rm -f "${RELEASE_DIR}"/libfprint-2-2_*.deb
+OUTPUT_DEB="${RELEASE_DIR}/${DEB_FILENAME}"
 dpkg-deb --build --root-owner-group "${PKG_DIR}" "${OUTPUT_DEB}"
 
 echo "SUCCESS! Created package:"

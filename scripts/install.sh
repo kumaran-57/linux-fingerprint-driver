@@ -7,7 +7,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
-DEB_PATH="${REPO_ROOT}/releases/libfprint-2-2_2.1.94.10-1+elanpress_amd64.deb"
+DEB_PATH="${REPO_ROOT}/releases/libfprint-2-2_2.1.94.10-2+elanpress_amd64.deb"
 
 if [ "$EUID" -ne 0 ]; then
     echo "[!] Please run with sudo: sudo ${0}"
@@ -25,26 +25,11 @@ if [ ! -f "${DEB_PATH}" ]; then
     "${REPO_ROOT}/packaging/build-deb.sh"
 fi
 
-# 2. Clean up any obsolete manual stock backup from /usr/lib that confuses ldconfig
-if [ -f "/usr/lib/x86_64-linux-gnu/libfprint-2.so.2.0.0.stock-backup" ]; then
-    echo "[*] Moving obsolete backup out of library search path..."
-    mkdir -p /var/backups/libfprint
-    mv -f "/usr/lib/x86_64-linux-gnu/libfprint-2.so.2.0.0.stock-backup" "/var/backups/libfprint/"
-fi
-
-# 3. Install Debian package cleanly
+# 2. Install Debian package cleanly (postinst handles ldconfig, udev, and PAM tuning)
 echo "[*] Installing Debian package ${DEB_PATH}..."
 apt-get install -y --reinstall "${DEB_PATH}"
 
-# 4. Trigger udev & restart service
-echo "[*] Reloading udev rules and restarting fprintd..."
-udevadm control --reload-rules || true
-udevadm trigger --action=add --attr-match=idVendor=04f3 --attr-match=idProduct=0903 || true
-if [ -d /run/systemd/system ]; then
-    systemctl restart fprintd.service || true
-fi
-
-# 5. Verification
+# 3. Verification
 sleep 1
 echo ""
 echo "=== Verification ==="

@@ -53,7 +53,7 @@
 | **TC-07: Driver Patch Compilation** | Meson & Ninja build of patched `libfprint` | Isolated Build | **PASS** | Built 146/146 targets without errors |
 | **TC-08: Device List Verification** | Confirm `04f3:0903` registered as `elanpress` | Library | **PASS** | Confirmed `ElanTech press-type fingerprint sensor` |
 | **TC-09: Udev HWDB Verification** | Validate generated udev autosuspend rules | Integration | **PASS** | `data+no-valgrind - libfprint:udev-hwdb` passed |
-| **TC-10: Debian Package Assembly** | Build production `.deb` package with epoch 2 | Packaging | **PASS** | `libfprint-2-2_2.1.94.10-1+elanpress_amd64.deb` built |
+| **TC-10: Debian Package Assembly** | Build production `.deb` package with epoch 2 | Packaging | **PASS** | `libfprint-2-2_2.1.94.10-2+elanpress_amd64.deb` built |
 | **TC-11: Timeout Resilience** | Verify 40ms bus pacing & transient timeout retry | Driver Logic | **PASS** | Code verified against USB 12 Mbps constraints |
 
 ---

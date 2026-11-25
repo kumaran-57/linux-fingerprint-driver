@@ -10,7 +10,7 @@ The easiest, cleanest, and most reliable method is using the pre-built `.deb` pa
 
 ### Method A: Single APT Command
 ```bash
-sudo apt install ./linux-fingerprint-driver/releases/libfprint-2-2_2.1.94.10-1+elanpress_amd64.deb
+sudo apt install ./linux-fingerprint-driver/releases/libfprint-2-2_2.1.94.10-2+elanpress_amd64.deb
 ```
 
 ### Method B: Automated Installer Script
@@ -18,9 +18,10 @@ sudo apt install ./linux-fingerprint-driver/releases/libfprint-2-2_2.1.94.10-1+e
 sudo ./linux-fingerprint-driver/scripts/install.sh
 ```
 
-### Why the `.deb` package is required:
-- **Package Epoch Management:** The package is versioned with epoch `2:1.94.10-1+elanpress`. Standard distribution upgrades (`sudo apt update && sudo apt upgrade`) will never overwrite it with the stock swipe driver because epoch `2:` takes precedence over Debian's `1:`.
-- **Dynamic Linker Protection:** Automatically purges any conflicting `.stock-backup` files from `/usr/lib/x86_64-linux-gnu/` and runs `ldconfig` atomically.
+### What the `.deb` package includes:
+- **Package Epoch Management:** The package is versioned with epoch `2:1.94.10-2+elanpress`. Standard distribution upgrades (`sudo apt update && sudo apt upgrade`) will never overwrite it with the stock swipe driver because epoch `2:` takes precedence over Debian's `1:`.
+- **Dynamic Linker Protection:** Automatically relocates any conflicting `.stock-backup` files from `/usr/lib/x86_64-linux-gnu/` and runs `ldconfig` atomically.
+- **PAM Integration Fixes:** Sets `max-tries=3 timeout=20` for `sudo`/Polkit retries, sets `timeout=-1` on `gdm-fingerprint` so sitting idle on the login screen never triggers verification timeouts, and skips `pam_fprintd` in `gdm-password` so password logins are instant.
 - **Hardware Database Sync:** Automatically updates `systemd-hwdb` and triggers udev rules for `04f3:0903`.
 
 ---
@@ -59,7 +60,7 @@ sudo apt install -y build-essential meson ninja-build pkg-config \
 ```bash
 ./linux-fingerprint-driver/packaging/build-deb.sh
 ```
-This script clones upstream `libfprint` (branch `elanpress`), applies our `0001-elanpress-support-04f3-0903.patch`, compiles with Meson/Ninja, strips binaries, and generates `releases/libfprint-2-2_2.1.94.10-1+elanpress_amd64.deb`.
+This script clones upstream `libfprint` (branch `elanpress`), applies our `0001-elanpress-support-04f3-0903.patch`, compiles with Meson/Ninja, strips binaries, and generates `releases/libfprint-2-2_2.1.94.10-2+elanpress_amd64.deb`.
 
 ---
 

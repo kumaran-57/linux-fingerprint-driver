@@ -216,7 +216,8 @@ elanpress_reset_capture (FpiDeviceElanPress *self)
 }
 
 static void
-elanpress_send_cmd (FpiSsm *ssm, FpDevice *dev, const guint8 *cmd)
+elanpress_send_cmd (FpiSsm *ssm, FpDevice *dev, const guint8 *cmd,
+                    FpiUsbTransferCallback callback)
 {
   FpiUsbTransfer *transfer = fpi_usb_transfer_new (dev);
 
@@ -226,7 +227,7 @@ elanpress_send_cmd (FpiSsm *ssm, FpDevice *dev, const guint8 *cmd)
                                    (guint8 *) cmd, ELANPRESS_CMD_LEN, NULL);
   fpi_usb_transfer_submit (transfer, ELANPRESS_CMD_TIMEOUT,
                            fpi_device_get_cancellable (dev),
-                           fpi_ssm_usb_transfer_cb, NULL);
+                           callback, NULL);
 }
 
 static void
@@ -262,6 +263,33 @@ enum capture_states {
 };
 
 static void
+elanpress_capture_cmd_cb (FpiUsbTransfer *transfer, FpDevice *dev,
+                          gpointer user_data, GError *error)
+{
+  FpiDeviceElanPress *self = FPI_DEVICE_ELANPRESS (dev);
+
+  if (error)
+    {
+      int state = fpi_ssm_get_cur_state (transfer->ssm);
+
+      if (g_error_matches (error, G_USB_DEVICE_ERROR, G_USB_DEVICE_ERROR_TIMED_OUT) &&
+          (state == CAPTURE_POLL_REQUEST || state == CAPTURE_BG_REQUEST) &&
+          self->num_frames == 0)
+        {
+          fp_dbg ("transient idle command timeout, resuming poll");
+          g_error_free (error);
+          fpi_ssm_jump_to_state_delayed (transfer->ssm, state,
+                                         ELANPRESS_IDLE_POLL_INTERVAL_MS);
+          return;
+        }
+      fpi_ssm_mark_failed (transfer->ssm, error);
+      return;
+    }
+
+  fpi_ssm_next_state (transfer->ssm);
+}
+
+static void
 elanpress_frame_cb (FpiUsbTransfer *transfer, FpDevice *dev,
                     gpointer user_data, GError *error)
 {
@@ -270,12 +298,17 @@ elanpress_frame_cb (FpiUsbTransfer *transfer, FpDevice *dev,
 
   if (error)
     {
+      int state = fpi_ssm_get_cur_state (transfer->ssm);
+
       if (g_error_matches (error, G_USB_DEVICE_ERROR, G_USB_DEVICE_ERROR_TIMED_OUT) &&
-          fpi_ssm_get_cur_state (transfer->ssm) == CAPTURE_POLL_READ &&
+          (state == CAPTURE_POLL_READ || state == CAPTURE_BG_READ) &&
           self->num_frames == 0)
         {
           fp_dbg ("transient idle poll timeout, resuming poll");
-          fpi_ssm_jump_to_state_delayed (transfer->ssm, CAPTURE_POLL_REQUEST,
+          g_error_free (error);
+          fpi_ssm_jump_to_state_delayed (transfer->ssm,
+                                         state == CAPTURE_BG_READ ?
+                                           CAPTURE_BG_REQUEST : CAPTURE_POLL_REQUEST,
                                          ELANPRESS_IDLE_POLL_INTERVAL_MS);
           return;
         }
@@ -334,7 +367,7 @@ capture_run_state (FpiSsm *ssm, FpDevice *dev)
   switch (fpi_ssm_get_cur_state (ssm))
     {
     case CAPTURE_LED_ON:
-      elanpress_send_cmd (ssm, dev, cmd_led_on);
+      elanpress_send_cmd (ssm, dev, cmd_led_on, fpi_ssm_usb_transfer_cb);
       break;
 
     case CAPTURE_BG_REQUEST:
@@ -343,7 +376,7 @@ capture_run_state (FpiSsm *ssm, FpDevice *dev)
           fpi_ssm_jump_to_state (ssm, CAPTURE_POLL_REQUEST);
           break;
         }
-      elanpress_send_cmd (ssm, dev, cmd_get_image);
+      elanpress_send_cmd (ssm, dev, cmd_get_image, elanpress_capture_cmd_cb);
       break;
 
     case CAPTURE_BG_READ:
@@ -354,7 +387,7 @@ capture_run_state (FpiSsm *ssm, FpDevice *dev)
     case CAPTURE_POLL_REQUEST:
       if (!self->wait_for_finger_off)
         fpi_device_report_finger_status (dev, FP_FINGER_STATUS_NEEDED);
-      elanpress_send_cmd (ssm, dev, cmd_get_image);
+      elanpress_send_cmd (ssm, dev, cmd_get_image, elanpress_capture_cmd_cb);
       break;
 
     case CAPTURE_POLL_READ:
@@ -867,7 +900,7 @@ open_run_state (FpiSsm *ssm, FpDevice *dev)
   switch (fpi_ssm_get_cur_state (ssm))
     {
     case OPEN_GET_DIM_SEND:
-      elanpress_send_cmd (ssm, dev, cmd_get_sensor_dim);
+      elanpress_send_cmd (ssm, dev, cmd_get_sensor_dim, fpi_ssm_usb_transfer_cb);
       break;
 
     case OPEN_GET_DIM_READ:

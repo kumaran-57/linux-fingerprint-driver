@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# rollback.sh - Revert to official stock distribution packages
+# rollback.sh - Revert to official stock distribution packages & PAM defaults
 # ==============================================================================
 
 set -euo pipefail
@@ -13,6 +13,22 @@ fi
 echo "=========================================================="
 echo " Fingerprint Driver Rollback Procedure"
 echo "=========================================================="
+
+PAM_BACKUP_DIR="/var/backups/libfprint/pam"
+if [ -f "${PAM_BACKUP_DIR}/common-auth.orig" ]; then
+    echo "[*] Restoring /etc/pam.d/common-auth..."
+    mv -f "${PAM_BACKUP_DIR}/common-auth.orig" /etc/pam.d/common-auth
+fi
+if [ -f "${PAM_BACKUP_DIR}/pam-configs-fprintd.orig" ] && [ -f /usr/share/pam-configs/fprintd ]; then
+    echo "[*] Restoring /usr/share/pam-configs/fprintd..."
+    mv -f "${PAM_BACKUP_DIR}/pam-configs-fprintd.orig" /usr/share/pam-configs/fprintd
+fi
+for base_name in gdm-fingerprint kde-fingerprint; do
+    if [ -f "${PAM_BACKUP_DIR}/${base_name}.orig" ] && [ -f "/etc/pam.d/${base_name}" ]; then
+        echo "[*] Restoring /etc/pam.d/${base_name}..."
+        mv -f "${PAM_BACKUP_DIR}/${base_name}.orig" "/etc/pam.d/${base_name}"
+    fi
+done
 
 echo "[*] Reinstalling official distribution package from repository..."
 apt-get install -y --allow-downgrades libfprint-2-2=1:* fprintd || \
@@ -31,5 +47,5 @@ if [ -d /run/systemd/system ]; then
     systemctl restart fprintd.service || true
 fi
 
-echo "[+] Rollback complete. Distro stock libfprint restored."
+echo "[+] Rollback complete. Distro stock libfprint and PAM defaults restored."
 echo "=========================================================="
