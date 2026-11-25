@@ -1,0 +1,33 @@
+# Build artifacts
+*.o
+*.a
+*.so
+*.so.*
+*.dylib
+*.dll
+*.exe
+
+# Subdirectories
+build/
+_build/
+subprojects/
+.meson/
+
+# Binaries
+test_protocol
+mock_sensor
+
+# Temporary files & editors
+*~
+*.swp
+*.swo
+.vscode/
+.idea/
+.DS_Store
+
+# Debian build artifacts (excluding release .deb)
+debian/.debhelper/
+debian/debhelper-build-stamp
+debian/files
+debian/libfprint*
+*.substvars
